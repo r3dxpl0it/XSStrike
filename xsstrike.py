@@ -6,7 +6,7 @@ from core.colors import end, red, white, bad, info
 
 # Just a fancy ass banner
 print('''%s
-\tXSStrike %sv3.1.2
+\tXSStrike %sv3.1.4
 %s''' % (red, white, end))
 
 try:
@@ -25,6 +25,8 @@ except ImportError:  # throws error in python2
     quit()
 
 # Let's import whatever we need from standard lib
+import sys
+import json
 import argparse
 
 # ... and configurations core lib
@@ -84,7 +86,7 @@ args = parser.parse_args()
 target = args.target
 path = args.path
 jsonData = args.jsonData
-paramData = args.paramData 
+paramData = args.paramData
 encode = args.encode
 fuzz = args.fuzz
 update = args.update
@@ -129,9 +131,15 @@ elif type(args.add_headers) == str:
 else:
     from core.config import headers
 
+core.config.globalVariables['headers'] = headers
+core.config.globalVariables['checkedScripts'] = set()
+core.config.globalVariables['checkedForms'] = {}
+core.config.globalVariables['definitions'] = json.loads('\n'.join(reader(sys.path[0] + '/db/definitions.json')))
+
 if path:
     paramData = converter(target, target)
 elif jsonData:
+    headers['Content-type'] = 'application/json'
     paramData = converter(paramData)
 
 if args_file:
@@ -174,7 +182,7 @@ else:
         host = urlparse(target).netloc
         main_url = scheme + '://' + host
         crawlingResult = photon(target, headers, level,
-                                threadCount, delay, timeout)
+                                threadCount, delay, timeout, skipDOM)
         forms = crawlingResult[0]
         domURLs = list(crawlingResult[1])
         difference = abs(len(domURLs) - len(forms))
@@ -185,8 +193,8 @@ else:
             for i in range(difference):
                 domURLs.append(0)
         threadpool = concurrent.futures.ThreadPoolExecutor(max_workers=threadCount)
-        futures = (threadpool.submit(crawl, scheme, host, main_url, form, domURL,
-                                     blindXSS, blindPayload, headers, delay, timeout, skipDOM, encoding) for form, domURL in zip(forms, domURLs))
+        futures = (threadpool.submit(crawl, scheme, host, main_url, form,
+                                     blindXSS, blindPayload, headers, delay, timeout, encoding) for form, domURL in zip(forms, domURLs))
         for i, _ in enumerate(concurrent.futures.as_completed(futures)):
             if i + 1 == len(forms) or (i + 1) % threadCount == 0:
                 logger.info('Progress: %i/%i\r' % (i + 1, len(forms)))
